@@ -1,14 +1,17 @@
-export const Get = async (url, response, error, load) => {
+export const Get = ( urls, response, error, load ) => {
+  const promises = urls.map( url => fetch(url) );
   load( true )
-  fetch( url ).then( res => {
-    return res.json()
+
+  Promise.all(promises)
+  .then( responses => {
+    return Promise.all(responses.map(response => response.json()));
   })
   .then( val => {
     response( val )
     load( false )
   })
   .catch( err => {
-    load( false )
     error( err )
-  })
+    load( false )
+  });
 }

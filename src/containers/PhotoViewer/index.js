@@ -1,70 +1,162 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { compose } from 'redux'
-import WithPhotoViewer from './action'
+import _ from 'lodash'
+import WithPhotoViewer from './actions'
 import {
   Row, Col,
-  Input, FormGroup, Label, Button
+  FormGroup, Label, Button,
+  Card, CardBody, CardHeader
 } from 'reactstrap'
 import Select from 'react-select'
+import ClipLoader from "react-spinners/ClipLoader";
+import InfoCard from './InfoCard';
+
 import Map from './Map'
+import CustomTable from './Table'
+
+import './index.scss'
 
 const PhotoViewer = props => {
-  useEffect(() => {
-    props.getCameraBrand()
-  }, [])
   
+  let mapRef = useRef();
+
+  useEffect(() => {
+    props.getCameraBrands( `https://www.flickr.com/services/rest/?method=flickr.cameras.getBrands&api_key=11f14d8a96657dd57a48c20c96ea3e8b&format=json&nojsoncallback=1` )
+  }, [])
+
+  useEffect(() => {
+    if ( !_.isEmpty( props.selectedPhoto )){
+      mapRef.current.panTo({ lat: parseFloat( props.selectedPhoto.latitude ), lng:  parseFloat( props.selectedPhoto.longitude ) })
+      mapRef.current.setZoom(14)
+    }
+  }, [ props.selectedPhoto ])
+
+  const onClickMarker = val => props.onChangePhotoHOC( 'selectedPhoto', val )
+
+  const { onLoadBrand, brands } = props.data.BrandReducer 
+  
+  const { onLoadModel, models } = props.data.ModelReducer
+  
+  const { onLoadPhoto, photos } = props.data.PhotoReducer
+
   return (
-    <Row>
-      <Col md={ 8 }>
-        <FormGroup>
-          <Label>Camera Brand</Label>
-          <Input
-            type={ 'select' }
-            onChange={ e => {
-              props.onChangePhotoHOC( 'selectedBrand', e.target.value )
-              props.onChangePhotoHOC( 'selectedCameraModel', null )
-              props.getCameraModel( e.target.value )
-            }}
-          >
-            <option value=""></option>
+    <div className='p-4'>
+      <Row>
+        <Col md={ 8 }>
+          <Card>
+            <CardHeader>
+              Photo Search
+            </CardHeader>
+            <CardBody>
+              <Row>
+                <Col md={ 6 }>  
+                  <FormGroup>
+                    <Label>Camera Brand</Label>
+                    {
+                      !onLoadBrand && (
+                        <Select
+                          isMulti
+                          options={ brands }
+                          value={ props.selectedBrand }
+                          onChange={ val => {
+                            props.onChangePhotoHOC( 'selectedBrand', val )
+                            props.onChangePhotoHOC( 'selectedCameraModel', [] )
+                            props.onSearchBrandModel( val )
+                          }} 
+                        />
+                      )
+                    }
+                    {
+                      onLoadBrand && (
+                        <div 
+                          style={{ 
+                            borderRadius: 4, border: 'lightgrey solid 1px', height: 38,
+                            display: 'grid', placeContent: 'center'
+                          }}
+                        >
+                          <ClipLoader size={ 20 }/>
+                        </div>
+                      )
+                    }
+                  </FormGroup>
+                </Col>
+                <Col md={ 6 }>
+                  <FormGroup>
+                    <Label>Camera Model</Label>
+                    {
+                      !onLoadModel && (
+                        <Select
+                          isMulti
+                          isDisabled={ props.selectedBrand.length < 1 }
+                          options={ models }
+                          value={ props.selectedCameraModel }
+                          onChange={ val => {
+                            props.onChangePhotoHOC( 'selectedCameraModel', val )
+                          }} 
+                        />
+                      )
+                    }
+                    {
+                      onLoadModel && (
+                        <div 
+                          style={{ 
+                            borderRadius: 4, border: 'lightgrey solid 1px', height: 38,
+                            display: 'grid', placeContent: 'center'
+                          }}
+                        >
+                          <ClipLoader size={ 20 }/>
+                        </div>
+                      )
+                    }
+                  </FormGroup>
+                </Col>
+              </Row>
+              <div className="d-flex">
+                <Button 
+                  color='warning'
+                  style={{ marginLeft: 'auto' }}
+                  disabled={ 
+                    props.selectedCameraModel.length < 1 ||
+                    onLoadPhoto
+                  }
+                  onClick={ () => {
+                    props.onSearchPhotos( props.selectedCameraModel )
+                    mapRef.current.setZoom( 1 )
+                    mapRef.current.panTo({ lat: -39.145678, lng: -71.711703 })
+                  }}
+                >
+                  Submit
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+          {
+            photos.length > 0 && (
+              <CustomTable
+                photos={ photos }
+                selectedPhoto={ props.selectedPhoto }
+                onClickMarker={ onClickMarker }
+              />
+            )
+          }
+        </Col>
+        <Col md={ 4 }>
+          <div style={{ position: 'sticky', top: 0 }}>
+            <Map
+              photos={ photos }
+              mapRef={ mapRef }
+              onLoadPhoto={ onLoadPhoto }
+              onClickMarker={ onClickMarker }
+            />
             {
-              props.cameraBrands.map( brandChild => (
-                <option key={ brandChild.id } value={ brandChild.id }>
-                  { brandChild.name }
-                </option>
-              ))
+              !_.isEmpty( props.selectedPhoto ) && (
+                <InfoCard selectedPhoto={ props.selectedPhoto }/>
+              )
             }
-          </Input>
-        </FormGroup>
-        <FormGroup>
-          <Label>Camera Model</Label>
-          <Select
-            isMulti
-            isDisabled={ !props.selectedBrand }
-            options={ props.cameraModels }
-            className="basic-multi-select"
-            value={ props.selectedCameraModel }
-            onChange={ val => {
-              props.onChangePhotoHOC( 'selectedCameraModel', val )
-            }} 
-          />
-        </FormGroup>
-        <Button 
-          color='primary'
-          onClick={ () => {
-            props.onSearchPhotos()
-          }}
-        >
-          Submit
-        </Button>
-      </Col>
-      <Col md={ 4 }>
-        <Map
-          googleMapURL={ "https://maps.googleapis.com/maps/api/js?key=AIzaSyA0yrlCvymwJWFJfXSaWY0uDfLwGMbGob0&callback=initMap" }
-          photos={ props.photos }
-        />
-      </Col>
-    </Row>
+          </div>
+        </Col>
+      </Row>
+    </div>
   )
 }
 
